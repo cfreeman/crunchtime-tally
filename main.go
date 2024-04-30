@@ -21,20 +21,21 @@ package main
 
 import (
 	"fmt"
-	"github.com/hypebeast/go-osc/osc"
+	"math"
 	"strconv"
 	"strings"
 	"sync"
-	"math"
+
+	"github.com/hypebeast/go-osc/osc"
 )
 
 type Vote int
 
 const (
-        N Vote = iota
-        A
-        B
-        C
+	N Vote = iota
+	A
+	B
+	C
 )
 
 var mutex = &sync.Mutex{}
@@ -86,7 +87,7 @@ func notifyQlab(votes [12]Vote) {
 	msg = osc.NewMessage("/cue/cTally" + strconv.Itoa(cTally) + "/start")
 	client.Send(msg)
 
-	msg = osc.NewMessage("/cue/total" + strconv.Itoa(aTally + bTally + cTally) + "/start")
+	msg = osc.NewMessage("/cue/total" + strconv.Itoa(aTally+bTally+cTally) + "/start")
 	client.Send(msg)
 
 	fmt.Println("Current: [a + b + c ] = T", aTally, bTally, cTally, (aTally + bTally + cTally))
@@ -117,7 +118,7 @@ func notifyQlab(votes [12]Vote) {
 
 func ackMessage(msg *osc.Message) {
 	// Let the sensor know that we got the message.
-	from := strings.Split(msg.From.String(), ":")
+	from := strings.Split(msg.Address, ":")
 	port, err := strconv.Atoi(from[1])
 	if err != nil {
 		port = 53001
@@ -188,21 +189,26 @@ func reset(msg *osc.Message) {
 }
 
 func main() {
-	fmt.Println("Starting Tally v13")
+	fmt.Println("Starting Tally v14")
 
 	addr := "10.0.1.2:8765"
-	server := &osc.Server{Addr: addr}
+	d := osc.NewStandardDispatcher()
 
 	for i := 1; i <= 36; i++ {
 		addr := "/cue/" + strconv.Itoa(i) + "on/start"
-		server.Handle(addr, incTally)
+		d.AddMsgHandler(addr, incTally)
 	}
 
 	for i := 1; i <= 36; i++ {
 		addr := "/cue/" + strconv.Itoa(i) + "off/start"
-		server.Handle(addr, decTally)
+		d.AddMsgHandler(addr, decTally)
 	}
 
-	server.Handle("/reset", reset)
+	d.AddMsgHandler("/reset", reset)
+
+	server := &osc.Server{
+		Addr:       addr,
+		Dispatcher: d,
+	}
 	server.ListenAndServe()
 }
